@@ -1,18 +1,16 @@
 import '/js/components/componentAddProduct.js';
-import '/js/components/componentTable.js';
 
 // Función para generar un ID único para el recibo basado en la fecha y hora
 function generateReceiptID() {
   const now = new Date();
   
   const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0'); // Los meses en JavaScript son 0-indexados (enero = 0)
+  const month = String(now.getMonth() + 1).padStart(2, '0');
   const year = now.getFullYear();
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
 
-  // Crear el ID único basado en la fecha y hora
   return `${day}${month}${year}${hours}${minutes}${seconds}`;
 }
 
@@ -21,9 +19,8 @@ let receiptData = {};
 
 // Función para agregar productos al recibo
 function addProductToReceipt(product) {
-  const receiptID = generateReceiptID(); // Generar un ID único para cada recibo
+  const receiptID = generateReceiptID();
 
-  // Si el recibo no existe, lo creamos
   if (!receiptData[receiptID]) {
     receiptData[receiptID] = {
       header: {
@@ -40,34 +37,48 @@ function addProductToReceipt(product) {
     };
   }
 
-  // Agregar el producto al array de productos
   receiptData[receiptID].products.push(product);
-
-  // Actualizar los totales
-  updateReceiptTotals(receiptID);
+  updateTotals();  // Llamamos a la función para actualizar los totales
 }
 
-// Función para actualizar los totales del recibo
-function updateReceiptTotals(receiptID) {
-  let subTotal = 0;
+// Función para eliminar un producto del recibo
+function removeProductFromReceipt(product) {
+  for (let receiptID in receiptData) {
+    const index = receiptData[receiptID].products.findIndex(p => p.codigoProd === product.codigoProd);
+    if (index !== -1) {
+      receiptData[receiptID].products.splice(index, 1);
+      break;
+    }
+  }
+  updateTotals();  // Llamamos a la función para actualizar los totales
+}
 
-  // Sumar los subtotales de todos los productos
-  receiptData[receiptID].products.forEach(product => {
+// Función para actualizar los totales (subtotal, iva, total)
+function updateTotals() {
+  const receiptID = Object.keys(receiptData)[Object.keys(receiptData).length - 1];
+  const receipt = receiptData[receiptID];
+
+  let subTotal = 0;
+  receipt.products.forEach(product => {
     subTotal += product.subTotal;
   });
 
-  // Calcular IVA y total
-  const iva = subTotal * 0.19; // 19% de IVA
+  const iva = subTotal * 0.19;  // Calcular el IVA (19%)
   const total = subTotal + iva;
 
-  // Actualizar los valores en el resumen
-  receiptData[receiptID].summary.subTotal = subTotal;
-  receiptData[receiptID].summary.iva = iva;
-  receiptData[receiptID].summary.total = total;
+  // Actualizamos los totales en el objeto receipt
+  receipt.summary.subTotal = subTotal;
+  receipt.summary.iva = iva;
+  receipt.summary.total = total;
+
+  // Actualizamos los valores en el HTML
+  document.getElementById("subtotal").textContent = subTotal.toFixed(2);
+  document.getElementById("iva").textContent = iva.toFixed(2);
+  document.getElementById("total").textContent = total.toFixed(2);
 }
 
 // Manejo del evento 'submit' del formulario de producto
-const myFormProduct = document.getElementById("myFormProduct");
+const myFormProduct = document.getElementById("formProduct");
 
 myFormProduct.addEventListener("submit", function(e) {
   e.preventDefault();
@@ -99,70 +110,24 @@ myFormProduct.addEventListener("submit", function(e) {
 
   // Botón para eliminar el producto de la tabla y los totales
   newRow.querySelector(".deleteButton").addEventListener("click", function() {
-    myTable.deleteRow(newRow.rowIndex); // Eliminar la fila de la tabla
-    // Eliminar el producto del recibo
-    removeProductFromReceipt(product);
+    myTable.deleteRow(newRow.rowIndex);  // Eliminar la fila de la tabla
+    removeProductFromReceipt(product);   // Eliminar el producto del recibo
   });
 });
 
-// Función para eliminar un producto del recibo y actualizar los totales
-function removeProductFromReceipt(product) {
-  // Buscar el recibo y el producto para eliminar
-  for (let receiptID in receiptData) {
-    const index = receiptData[receiptID].products.findIndex(p => p.codigoProd === product.codigoProd);
-    if (index !== -1) {
-      // Eliminar el producto y actualizar los totales
-      receiptData[receiptID].products.splice(index, 1);
-      updateReceiptTotals(receiptID);
-      break;
-    }
-  }
-}
-
-// Función que se ejecuta cuando el usuario hace clic en el botón "Pagar"
+// Función para actualizar los totales cuando el usuario haga clic en "Pagar"
 document.getElementById("payButton").addEventListener("click", function() {
-  const receiptID = generateReceiptID(); // Generar el ID del recibo cuando se paga
+  const receiptID = Object.keys(receiptData)[Object.keys(receiptData).length - 1];
+  const receipt = receiptData[receiptID];
 
-  // Aquí se generan los datos completos del recibo para mostrar en el alert
-  const receipt = receiptData[receiptID] || {};
+  const subTotal = receipt.summary.subTotal;
+  const iva = receipt.summary.iva;
+  const total = receipt.summary.total;
 
-  // Generar la estructura completa para mostrar en el alert
-  let receiptDetails = `Recibo ID: ${receiptID}\n`;
-  receiptDetails += `Fecha: ${receipt.header.receiptDate}\n`;
-  receiptDetails += `Cajero: ${receipt.header.cashier}\n\n`;
-
-  receiptDetails += "Productos:\n";
-  receipt.products.forEach(product => {
-    receiptDetails += `${product.nombreProd} (Código: ${product.codigoProd}) - $${product.valor} x ${product.cantidad} = $${product.subTotal}\n`;
-  });
-
-  receiptDetails += `\nSubtotal: $${receipt.summary.subTotal.toFixed(2)}\n`;
-  receiptDetails += `IVA (19%): $${receipt.summary.iva.toFixed(2)}\n`;
-  receiptDetails += `Total: $${receipt.summary.total.toFixed(2)}\n`;
-
-  // Mostrar el recibo completo en un alert
-  window.alert(receiptDetails);
-
-  // Limpiar el contenido de la tabla y los totales
-  document.getElementById("table").getElementsByTagName('tbody')[0].innerHTML = '';
-  document.getElementById("subtotal").textContent = '0.00';
-  document.getElementById("iva").textContent = '0.00';
-  document.getElementById("total").textContent = '0.00';
-
-  // Limpiar los productos en receiptData
-  receiptData = {};
+  alert(`Recibo ${receiptID}:
+  \nSubtotal: $${subTotal.toFixed(2)}
+  \nIVA (19%): $${iva.toFixed(2)}
+  \nTotal: $${total.toFixed(2)}
+  \nProductos: \n${receipt.products.map(p => `${p.nombreProd} - $${p.subTotal.toFixed(2)}`).join("\n")}`);
+  location.reload();
 });
-
-function generateReceiptID() {
-    const now = new Date();
-    
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0'); // Los meses en JavaScript son 0-indexados (enero = 0)
-    const year = now.getFullYear();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    const seconds = String(now.getSeconds()).padStart(2, '0');
-  
-    // Crear el ID único basado en la fecha y hora
-    return `${day}${month}${year}${hours}${minutes}${seconds}`;
-  }
